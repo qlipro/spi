@@ -1,0 +1,40 @@
+cat > .gitignore << 'EOF'
+# 编译生成的文件
+*.o
+*.d
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+*.crf
+*.axf
+
+# IDE生成的文件
+.Debug/
+Debug/
+Release/
+*.uvguix.*
+*.uvoptx
+*.scvd
+*.uvprojx
+*.uvguix
+*.uvopt
+*.uvgui
+*.dep
+JLinkLog.txt
+JLinkSettings.ini
+
+# CubeMX生成的文件
+*.ioc
+.mxproject
+.cproject
+.project
+.settings/
+*.launch
+
+# 编译中间文件
+cmake-build-debug/
+.idea/
+build/
+EOF
