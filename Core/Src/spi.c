@@ -135,13 +135,11 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* spiHandle)
 /* USER CODE BEGIN 1 */
 #include "LCD.h"
 
-#include "wifi.h"
+
 
 extern volatile DMA_Operation_t dma_current_op;
 extern volatile uint8_t dma_clear_active;
 extern void (*dma_callback)(void);
-
-extern WiFiLineDMA_t line_dma;
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
     if(hspi->Instance == SPI2) {
@@ -161,56 +159,7 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
 				}
 				break;
 
-            case DMA_OP_WIFI_LINE:
-                // WIFI行传输完成处理
-                CS_SET1();  // 释放片选
 
-                // 记录完成的行
-                uint16_t completed_line = line_dma.current_line;
-
-                // 清除忙标志
-                line_dma.dma_busy = 0;
-
-                // 调用行完成回调（如果有）
-                if (line_dma.line_done_callback) {
-                    line_dma.line_done_callback(completed_line);
-                }
-
-                // 检查是否有下一行数据准备好
-                uint8_t next_buf = line_dma.active_buf ^ 1;
-                if (line_dma.line_ready[next_buf]) {
-                    // 有下一行数据，立即启动传输
-                    line_dma.current_line++;
-
-                    // 设置窗口（下一行）
-                    set_window(0, line_dma.current_line,
-                              IMAGE_WIDTH - 1, line_dma.current_line);
-                    DC_SET1();
-                    CS_SET0();
-
-                    // 启动下一行的DMA传输
-                    if (HAL_SPI_Transmit_DMA(&hspi2,
-                        line_dma.buffer[next_buf],
-                        IMAGE_WIDTH * 2) == HAL_OK) {
-                        line_dma.dma_busy = 1;
-                        line_dma.active_buf = next_buf;
-                        line_dma.line_ready[next_buf] = 0;
-                        // 保持dma_current_op不变（仍是DMA_OP_WIFI_LINE）
-                    } else {
-                        CS_SET1();
-                        // 启动失败，结束WIFI行传输
-                        line_dma.dma_busy = 0;
-                        line_dma.frame_complete = 1;
-                        dma_current_op = DMA_OP_NONE;
-                    }
-                } else {
-                    // 没有更多行数据，检查是否完成一帧
-                    if (line_dma.current_line >= IMAGE_HEIGHT - 1) {
-                        line_dma.frame_complete = 1;
-                    }
-                    dma_current_op = DMA_OP_NONE;
-                }
-                break;
 
 			case DMA_OP_IMAGE:
 				// 图片传输完成处理
@@ -238,7 +187,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
         // 清除所有标志
         dma_clear_active = 0;
         dma_current_op = DMA_OP_NONE;
-        line_dma.dma_busy = 0;
+
 
         // 可以添加错误处理
         // 比如重新初始化SPI或报告错误

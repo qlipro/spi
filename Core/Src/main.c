@@ -30,13 +30,13 @@
 #include "aht20.h"
 #include "stdio.h"
 #include "6050.h"
-#include "wifi.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 //UART_HandleTypeDef huart2;
-WiFi_Handle_t wifi;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -69,14 +69,7 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    static uint8_t rx_data;
 
-    if (huart->Instance == USART2) {
-        WiFi_Process(&wifi, rx_data);
-        HAL_UART_Receive_IT(&huart2, &rx_data, 1);
-    }
-}
 /* USER CODE END 0 */
 
 /**
@@ -138,22 +131,10 @@ if(MPU6050_Init(&hi2c1) == HAL_OK) {
 	while(1);
 	}
 
-LCD_ShowString(10, 20, "WiFi Screen Mirror", WHITE, &afont8x6);
-LCD_ShowString(10, 40, "Connecting...", YELLOW, &afont8x6);
 
-// 初始化WiFi（AP模式）
-WiFi_Init(&wifi, &huart2);
-WiFi_Config_AP(&wifi, "STM32_LCD", "12345678");
-WiFi_Start_Server(&wifi, 8080);
 
-LCD_ShowString(10, 60, "IP: 192.168.4.1", CYAN, &afont8x6);
-LCD_ShowString(10, 80, "Port: 8080", CYAN, &afont8x6);
- // 启动UART接收中断
-    uint8_t rx_data;
-    HAL_UART_Receive_IT(&huart2, &rx_data, 1);
-
-const char *at_test ="AT+CIPSERVER?\r\n";//替换为可用的at指令，用于测试
-HAL_UART_Transmit(&huart2, (uint8_t*)at_test, strlen(at_test), HAL_MAX_DELAY);
+//const char *at_test ="AT\r\n";//替换为可用的at指令，用于测试
+//HAL_UART_Transmit(&huart2, (uint8_t*)at_test, strlen(at_test), HAL_MAX_DELAY);
 
   /* USER CODE END 2 */
 
@@ -167,13 +148,13 @@ HAL_UART_Transmit(&huart2, (uint8_t*)at_test, strlen(at_test), HAL_MAX_DELAY);
 //	  	  sprintf(message_uart, "t: %.1f , h: %.1f ", temperature, humidity);
 //	  	  sprintf(message_temp, "T %.1f ", temperature);
 //	  	  sprintf(message_hum, "H %.1f ", humidity);
-////for(uint16_t i=0x0000;i<0x001F;i++){
-////LCD_Clear_DMA(i);
-////
-////
-////
-//////HAL_Delay(10);
-////}LCD_WaitForDMA();
+for(uint16_t i=0x0000;i<0x001F;i++){
+LCD_Clear_DMA(i);
+
+
+
+//HAL_Delay(10);
+}LCD_WaitForDMA();
 //LCD_ShowString(8, 20, message_temp, WHITE,BLACK, &afont12x8);
 //LCD_ShowString(64, 20, message_hum, WHITE,BLACK, &afont12x8);
 //LCD_ShowStringBG_DMA(32,52,"AHT20",BLACK,CYAN,&afont12x8);
@@ -241,15 +222,7 @@ HAL_UART_Transmit(&huart2, (uint8_t*)at_test, strlen(at_test), HAL_MAX_DELAY);
 
 //LCD_ShowString0(60, 130, (char*)rxdata, RED, &afont12x8);
 
-	  // 显示连接状态
-	          static uint32_t last_time = 0;
-	          if (HAL_GetTick() - last_time > 1000) {
-	              char buf[32];
-	              sprintf(buf, "State: %d", wifi.state);
-	              LCD_ClearArea(10, 100, 100, 20, BLACK);
-	              LCD_ShowString(10, 100, buf, GREEN, &afont8x6);
-	              last_time = HAL_GetTick();
-	          }
+
 
 
     /* USER CODE END WHILE */

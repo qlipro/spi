@@ -11,7 +11,6 @@
 #include <stdint.h>
 #include "font.h"
 
-#include "wifi.h"
 
 //typedef enum {
 //    LCD_IDLE,
@@ -31,16 +30,7 @@ typedef enum {
 } DMA_Operation_t;
 
 
-// 添加WIFI行DMA的外部声明
-typedef struct {
-    uint8_t buffer[2][IMAGE_WIDTH * 2];  // 双缓冲
-    volatile uint8_t active_buf;          // 当前使用的缓冲区
-    volatile uint8_t dma_busy;            // DMA传输进行中
-    volatile uint8_t line_ready[2];        // 缓冲区就绪标志
-    volatile uint16_t current_line;        // 当前行号
-    volatile uint8_t frame_complete;       // 帧完成标志
-    void (*line_done_callback)(uint16_t line); // 行完成回调
-} WiFiLineDMA_t;
+
 
 extern volatile uint8_t dma_clear_active;  // 正在DMA传输
 extern volatile DMA_Operation_t dma_current_op;
