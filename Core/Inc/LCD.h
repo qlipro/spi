@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 #include "font.h"
-
+#include "cursor.h"
 
 //typedef enum {
 //    LCD_IDLE,
@@ -73,6 +73,9 @@ void LCD_Init(void);
 
 void set_window(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1);
 void set_pixel(uint8_t x, uint8_t y, uint16_t color);
+
+uint8_t* LCD_ReadLine(uint8_t y, uint8_t h, uint8_t *rgb565_out);
+
 void LCD_Clear(uint16_t color);
 void LCD_Clear_DMA(uint16_t color);
 void LCD_DMA_Continue(void);

@@ -30,6 +30,8 @@
 #include "aht20.h"
 #include "stdio.h"
 #include "6050.h"
+#include "printf.h"
+#include "cursor.h"
 
 /* USER CODE END Includes */
 
@@ -109,6 +111,8 @@ int main(void)
 LCD_Init();
 
 LCD_Clear(BLUE);
+
+
 float temperature, humidity; // 温度和湿度变量
  char message_uart[50];       // 要发送的字符串
  char message_temp[30];	// oled显示温度字符串
@@ -131,10 +135,23 @@ if(MPU6050_Init(&hi2c1) == HAL_OK) {
 	while(1);
 	}
 
+LCD_InitContext(55, 6, &afont12x8, 0xFFFF, 0x0000);
+
+LCD_Printf("gfhfffjgjgj%d\r\n",234567);
+LCD_Printf("hello\r\n");
+
+//uint8_t buf[12 * 128 * 2];
+//if(LCD_ReadLine(55, 12, buf)){
+//set_window(0,55+12*4,X_MAX_PIXEL-1,55+12*4+12-1);
+//DC_SET1();
+//CS_SET0();
+//HAL_SPI_Transmit(&hspi2, buf, sizeof(buf), HAL_MAX_DELAY);
+//CS_SET1();
+//}
 
 
-//const char *at_test ="AT\r\n";//替换为可用的at指令，用于测试
-//HAL_UART_Transmit(&huart2, (uint8_t*)at_test, strlen(at_test), HAL_MAX_DELAY);
+
+
 
   /* USER CODE END 2 */
 
@@ -148,51 +165,40 @@ if(MPU6050_Init(&hi2c1) == HAL_OK) {
 //	  	  sprintf(message_uart, "t: %.1f , h: %.1f ", temperature, humidity);
 //	  	  sprintf(message_temp, "T %.1f ", temperature);
 //	  	  sprintf(message_hum, "H %.1f ", humidity);
-for(uint16_t i=0x0000;i<0x001F;i++){
-LCD_Clear_DMA(i);
 
+//for(uint16_t i=0x0000;i<0x001F;i++){
+//LCD_Clear_DMA(i);
+//}LCD_WaitForDMA();
 
-
-//HAL_Delay(10);
-}LCD_WaitForDMA();
 //LCD_ShowString(8, 20, message_temp, WHITE,BLACK, &afont12x8);
 //LCD_ShowString(64, 20, message_hum, WHITE,BLACK, &afont12x8);
 //LCD_ShowStringBG_DMA(32,52,"AHT20",BLACK,CYAN,&afont12x8);
 //LCD_WaitForDMA();
 //
 //
-////for(uint16_t i=0x0000;i<0x07E0;i+=0x01<<6){
-////LCD_Clear_DMA(i);
-////
-////
-//////HAL_Delay(10);
-////}LCD_WaitForDMA();
-////LCD_ShowString(8, 20, message_temp, WHITE,BLACK, &afont12x8);
-////LCD_ShowString(64, 20, message_hum, WHITE,BLACK, &afont12x8);
-////LCD_ShowString(32,52,"AHT20",BLACK,CYAN,&afont12x8);
-//
-//
-////for(uint16_t i=0x0000;i<0xF800;i+=0x01<<11){
-////LCD_Clear_DMA(i);
-////
-////
-//////HAL_Delay(10);
-////}LCD_WaitForDMA();
-////LCD_ShowStringBG_DMA(8, 20, message_temp, WHITE,BLACK, &afont12x8);
-////LCD_ShowStringBG_DMA(64, 20, message_hum, WHITE,BLACK, &afont12x8);
-////LCD_ShowStringBG_DMA(32,52,"AHT20",BLACK,CYAN,&afont12x8);
-//
-//
-//
+//for(uint16_t i=0x0000;i<0x07E0;i+=0x01<<6){
+//LCD_Clear_DMA(i);
+//}LCD_WaitForDMA();
+
+//LCD_ShowString(8, 20, message_temp, WHITE,BLACK, &afont12x8);
+//LCD_ShowString(64, 20, message_hum, WHITE,BLACK, &afont12x8);
+//LCD_ShowString(32,52,"AHT20",BLACK,CYAN,&afont12x8);
+
+//for(uint16_t i=0x0000;i<0xF800;i+=0x01<<11){
+//LCD_Clear_DMA(i);
+//}LCD_WaitForDMA();
+
+//LCD_ShowStringBG_DMA(8, 20, message_temp, WHITE,BLACK, &afont12x8);
+//LCD_ShowStringBG_DMA(64, 20, message_hum, WHITE,BLACK, &afont12x8);
+//LCD_ShowStringBG_DMA(32,52,"AHT20",BLACK,CYAN,&afont12x8);
+
 //if(MPU6050_IsDataReady()) {
 //		  MPU6050_ProcessData();
 //		  MPU6050_StartDMARead();  // 启动下一次读取
 //		  angle1 = MPU6050_GetAngle1();
 //		  angle2 = MPU6050_GetAngle2();
 //	  }
-//
-//
-//
+
 //	  // 按需更新显示（比如50ms一次）
 //	  if(HAL_GetTick() - last_display1 >= 50) {
 ////	    	  HAL_UART_Transmit(&huart2, (uint8_t*)display_buf, strlen(display_buf), 100);
@@ -215,12 +221,7 @@ LCD_Clear_DMA(i);
 //		  last_display1 = HAL_GetTick();
 //	  }
 
-//const char *at_test ="AT\r\n";
-//HAL_UART_Transmit(&huart2, (uint8_t*)at_test, strlen(at_test), HAL_MAX_DELAY);
-//uint8_t rxdata[10] ;
-//		HAL_UART_Receive(&huart2, rxdata, 10, 100);
 
-//LCD_ShowString0(60, 130, (char*)rxdata, RED, &afont12x8);
 
 
 

@@ -74,6 +74,9 @@ void LCD_WriteDataMulti(uint8_t *data, uint16_t len) {
     CS_SET1();
 }
 
+
+
+
 void LCD_Init(void){
 	 // 硬件复位
 	RST_SET0();
@@ -179,7 +182,45 @@ void set_pixel(uint8_t x, uint8_t y, uint16_t color){
 	LCD_WriteData2(color);
 }
 
+uint8_t* LCD_ReadLine(uint8_t y, uint8_t h, uint8_t *rgb565_out){
 
+	LCD_WriteCmd(0x2A);
+	LCD_WriteData(0x00);
+	LCD_WriteData(0);
+	LCD_WriteData(0x00);
+	LCD_WriteData(X_MAX_PIXEL-1);
+
+	LCD_WriteCmd(0x2B);
+	LCD_WriteData(0x00);
+	LCD_WriteData(y);
+	LCD_WriteData(0x00);
+	LCD_WriteData(y+h-1);
+
+	LCD_WriteCmd(0x2E);
+
+    // 批量读取
+    DC_SET1();
+    CS_SET0();
+
+    uint8_t dummy = 0xFF;
+    HAL_SPI_Transmit(&hspi2, &dummy, 1, HAL_MAX_DELAY);
+
+	uint8_t buf[h*X_MAX_PIXEL*3];
+	HAL_SPI_Receive(&hspi2, buf, h*X_MAX_PIXEL*3, HAL_MAX_DELAY);
+	CS_SET1();
+
+	for(uint8_t i=0;i<12 * 128 *2;i+=2){
+	    uint8_t r6 = buf[i*3 + 0];
+	    uint8_t g6 = buf[i*3 + 1];
+	    uint8_t b6 = buf[i*3 + 2];
+		uint16_t t = ((r6 & 0xF8) << 8) |    // R: 取高5位
+                     ((g6 & 0xFC) << 3) |    // G: 取高6位
+					 ((b6 & 0xF8) >> 3);
+		rgb565_out[i] = t>>8;
+		rgb565_out[i+1] = t&0xFF;
+	}
+//	return 1;
+}
 
 // LCD.c 中添加统一的DMA启动函数
 static HAL_StatusTypeDef LCD_StartDMA(DMA_Operation_t op,
