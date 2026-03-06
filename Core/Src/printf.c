@@ -72,14 +72,28 @@ void LCD_ShowChar(uint8_t x, uint8_t y, char ch, uint16_t color, uint16_t bg_col
  * @parameter bg_color 背景颜色
  */
 void LCD_InitContext(uint8_t y, uint8_t count_of_line, const ASCIIFont *font, uint16_t text_color, uint16_t bg_color) {
+    uint8_t h = count_of_line*font->h;
+    uint8_t w = X_MAX_PIXEL-16;
+    if(h>96){h=96;}
+
     lcd_ctx.font = font;
     lcd_ctx.text_color = text_color;
     lcd_ctx.bg_color = bg_color;
     lcd_ctx.line_height = font->h;
     lcd_ctx.cursor_x = 12;
     lcd_ctx.cursor_y = y;
-//    lcd_ctx.height = count_of_line*font->h;
-    LCD_ClearArea(8, y, X_MAX_PIXEL-16, count_of_line*font->h, bg_color);
+    lcd_ctx.start_y = y;
+    lcd_ctx.line_count = count_of_line;
+    lcd_ctx.height = h;
+    lcd_ctx.auto_wrap = 1;
+
+    lcd_ctx.bg_height = h;
+
+    LCD_ClearArea(6, y-2, w+4, h+4, WHITE);
+    LCD_ClearArea(X_MAX_PIXEL-7,y-1,1,h+2,GRAY1);
+    LCD_ClearArea(6,y-2,1,h+4,GRAY0);
+    LCD_ClearArea(7,y+1+h,w+3,1,GRAY2);
+    LCD_ClearArea(8, y, w, h, bg_color);
 }
 
 // 清除从当前光标到行尾的内容
@@ -107,9 +121,9 @@ void LCD_HandleBackspace(void) {
 
     uint8_t char_width = lcd_ctx.font->w;
 
-    if (lcd_ctx.cursor_x >= char_width) {
+    if (lcd_ctx.cursor_x-8 >= char_width) {
         lcd_ctx.cursor_x -= char_width;
-    } else if (lcd_ctx.cursor_y >= lcd_ctx.line_height) {
+    } else if (lcd_ctx.cursor_y - lcd_ctx.start_y >= lcd_ctx.line_height) {
         // 退格到上一行
         lcd_ctx.cursor_y -= lcd_ctx.line_height;
         lcd_ctx.cursor_x = lcd_ctx.width - char_width;
@@ -127,10 +141,11 @@ void LCD_HandleNewLine(void) {
     if (!lcd_ctx.font) return;
 
     lcd_ctx.cursor_x = 8;
+
     lcd_ctx.cursor_y += lcd_ctx.line_height;
 
     // 检查是否需要滚动
-    if (lcd_ctx.cursor_y + lcd_ctx.line_height > lcd_ctx.height) {
+    if (lcd_ctx.cursor_y - lcd_ctx.start_y + lcd_ctx.line_height > lcd_ctx.height) {
         // 屏幕向上滚动一行
         LCD_ScrollUp(lcd_ctx.line_height);
         lcd_ctx.cursor_y -= lcd_ctx.line_height;
@@ -139,7 +154,7 @@ void LCD_HandleNewLine(void) {
 
 // 处理回车
 void LCD_HandleCarriageReturn(void) {
-    lcd_ctx.cursor_x = 0;
+    lcd_ctx.cursor_x = 8;
 }
 
 // 处理制表符
@@ -189,9 +204,10 @@ void LCD_PrintString(const char *str) {
                 break;
 
             case '\f':  // 换页（清屏）
-                LCD_Clear(lcd_ctx.bg_color);
-                lcd_ctx.cursor_x = 0;
-                lcd_ctx.cursor_y = 0;
+//                LCD_Clear(lcd_ctx.bg_color);
+            	LCD_ClearArea(8, lcd_ctx.start_y, X_MAX_PIXEL-16, lcd_ctx.bg_height, lcd_ctx.bg_color);
+                lcd_ctx.cursor_x = 8;
+                lcd_ctx.cursor_y = lcd_ctx.start_y;
                 break;
 
             case '\v':  // 垂直制表
@@ -206,7 +222,7 @@ void LCD_PrintString(const char *str) {
                 }
 
                 // 检查是否需要滚动
-                if (lcd_ctx.cursor_y + lcd_ctx.line_height > lcd_ctx.height) {
+                if (lcd_ctx.cursor_y - lcd_ctx.start_y + lcd_ctx.line_height > lcd_ctx.height) {
                     LCD_ScrollUp(lcd_ctx.line_height);
                     lcd_ctx.cursor_y -= lcd_ctx.line_height;
                 }

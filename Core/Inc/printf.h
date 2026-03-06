@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include "LCD.h"
 
+void LCD_ShowChar(uint8_t x, uint8_t y, char ch, uint16_t color, uint16_t bg_color, const ASCIIFont *font);
 void LCD_InitContext(uint8_t y, uint8_t count_of_line, const ASCIIFont *font, uint16_t text_color, uint16_t bg_color);
 void LCD_Printf(const char *format, ...);
 

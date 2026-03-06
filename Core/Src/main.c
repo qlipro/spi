@@ -18,9 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "dma.h"
 #include "i2c.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -61,6 +63,38 @@ char display_buf[16];  // 局部缓冲区，不占用全局内存
 char uart_buffer[32];
 float angle1 =0;
 float angle2 =0;
+
+
+static int16_t last_position = 0;
+static uint32_t last_rotate_time = 0;
+static uint8_t cursor_moved = 0;
+
+// 字符集
+static const char* charset[] = {
+    "abcdefghijklmnopqrstuvwxyz",            // 模式0: 小写字母
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",            // 模式1: 大写字母
+    "0123456789",                            // 模式2: 数字
+	" !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",    // 模式3: 符号 (33个)
+	"\b \t\r\n\v\f"                          // 模式4: 控制字符 (退格,空格,制表,回车,换行,垂直制表,换页
+};
+// 控制字符的预览显示（与charset[4]一一对应）
+static const char* ctrl_preview[] = {
+	    "\\b",  // 退格
+	    "[]",  // 空格
+	    "\\t",  // 制表符
+	    "\\r",  // 回车
+	    "\\n",  // 换行
+	    "\\v",  // 垂直制表
+	    "\\f"   // 换页
+};
+
+static uint8_t mode = 0;
+static uint8_t char_index = 0;
+
+// 控制字符的实际字符（与charset[3]相同，用于执行）
+#define CTRL_CHARS charset[4]
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -107,10 +141,12 @@ int main(void)
   MX_SPI2_Init();
   MX_I2C1_Init();
   MX_USART2_UART_Init();
+  MX_ADC1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 LCD_Init();
 
-LCD_Clear(BLUE);
+LCD_Clear(CYAN);
 
 
 float temperature, humidity; // 温度和湿度变量
@@ -123,9 +159,7 @@ float temperature, humidity; // 温度和湿度变量
 
 
 if(MPU6050_Init(&hi2c1) == HAL_OK) {
-	LCD_ShowStringBG(22, 6, "MPU "
-	//		"initialized"
-	"", RED, BLACK, &afont12x8);
+	LCD_ShowString(8, 6, "MPU6050 is ready", RED, &afont8x6);
 	// 	  OLED_DrawImage((128 - (lklkImg.w)) / 2, 0, &lklkImg, OLED_COLOR_NORMAL);
 	// 	  OLED_ShowFrame();
 	/* 启动第一次DMA读取 */
@@ -135,23 +169,12 @@ if(MPU6050_Init(&hi2c1) == HAL_OK) {
 	while(1);
 	}
 
-LCD_InitContext(55, 6, &afont12x8, 0xFFFF, 0x0000);
 
-LCD_Printf("gfhfffjgjgj%d\r\n",234567);
+HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
+
+LCD_InitContext(55, 12, &afont12x8, 0xFFFF, 0x0000);
+
 LCD_Printf("hello\r\n");
-
-//uint8_t buf[12 * 128 * 2];
-//if(LCD_ReadLine(55, 12, buf)){
-//set_window(0,55+12*4,X_MAX_PIXEL-1,55+12*4+12-1);
-//DC_SET1();
-//CS_SET0();
-//HAL_SPI_Transmit(&hspi2, buf, sizeof(buf), HAL_MAX_DELAY);
-//CS_SET1();
-//}
-
-
-
-
 
   /* USER CODE END 2 */
 
@@ -159,6 +182,102 @@ LCD_Printf("hello\r\n");
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  char pos_buf[20];
+	      sprintf(pos_buf, "X:%03d Y:%03d", lcd_ctx.cursor_x-8, lcd_ctx.cursor_y-lcd_ctx.start_y);
+	      LCD_ShowString(0, 30, pos_buf, GREEN, &afont8x6);
+
+
+	  // 1. 读取编码器位置
+	         int16_t current_position = (int16_t)__HAL_TIM_GET_COUNTER(&htim1);
+
+	         // 2. 检测是否旋转
+	         if (current_position != last_position) {
+	             int8_t direction = (current_position > last_position) ? 1 : -1;
+	             last_position = current_position;
+
+	             // 更新字符索引
+	             int len = strlen(charset[mode]);
+	             char_index = (char_index + len + direction) % len;
+
+	             if (mode == 4) {
+	                 // 模式4：显示控制字符预览
+	                 LCD_ShowString(lcd_ctx.cursor_x, lcd_ctx.cursor_y,
+	                                ctrl_preview[char_index],
+	                                lcd_ctx.text_color, lcd_ctx.font);
+	                 // ShowString 不移动光标
+	             } else {
+	             // 显示字符
+	             LCD_Printf("%c", charset[mode][char_index]);
+
+	             lcd_ctx.cursor_x -= lcd_ctx.font->w;
+	             }
+	             LCD_ClearArea(lcd_ctx.cursor_x, lcd_ctx.cursor_y+lcd_ctx.font->h-1,
+	             	                    lcd_ctx.font->w, 1,
+	             	                    0x0000);
+	             // 记录时间
+	             last_rotate_time = HAL_GetTick();
+	             cursor_moved = 0;
+	         }
+
+	         // 3. 检测按钮
+	         if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET) {
+	             HAL_Delay(20);
+	             if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET) {
+	                 while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET);
+	                 LCD_ClearArea(lcd_ctx.cursor_x, lcd_ctx.cursor_y,
+								   lcd_ctx.font->w * 2, lcd_ctx.font->h, lcd_ctx.bg_color);
+	                 mode = (mode + 1) % 5;
+	                 char_index = 0;
+
+	                 if (mode == 4) {
+						 // 模式3：显示第一个控制字符预览
+						 LCD_ShowString(lcd_ctx.cursor_x, lcd_ctx.cursor_y,
+										ctrl_preview[0],
+										lcd_ctx.text_color, lcd_ctx.font);
+					 } else {
+						 // 其他模式：显示第一个字符
+						 LCD_Printf("%c", charset[mode][char_index]);
+						 lcd_ctx.cursor_x -= lcd_ctx.font->w;
+					 }
+
+	                 last_rotate_time = HAL_GetTick();
+	                 cursor_moved = 0;
+	             }
+	         }
+
+	         // 4. 800ms 超时推进光标
+	         if (!cursor_moved && last_rotate_time != 0) {
+	             if (HAL_GetTick() - last_rotate_time > 800) {
+
+	            	 if (mode == 4) {
+	            	             // 模式3：执行控制字符功能
+	            	             // 先擦除预览的 [XXX]
+	            	             LCD_ClearArea(lcd_ctx.cursor_x, lcd_ctx.cursor_y,
+	            	                           lcd_ctx.font->w * 2, lcd_ctx.font->h, lcd_ctx.bg_color);
+
+	            	             // 通过printf输出实际控制字符（自动执行功能）
+	            	             LCD_Printf("%c", CTRL_CHARS[char_index]);
+
+
+	            	         } else {
+	            	             // 其他模式：正常推进光标
+								 lcd_ctx.cursor_x += lcd_ctx.font->w;
+								 if (lcd_ctx.cursor_x + lcd_ctx.font->w > lcd_ctx.width + 8) {
+									 lcd_ctx.cursor_x = 8;
+									 lcd_ctx.cursor_y += lcd_ctx.line_height;
+								 }
+	            	         }
+	                 cursor_moved = 1;
+	       	      LCD_ClearArea(lcd_ctx.cursor_x, lcd_ctx.cursor_y+lcd_ctx.font->h-1,
+	       	                    lcd_ctx.font->w, 1,
+	       	                    0xFFFF);
+	                 last_rotate_time = 0;
+	             }
+	         }
+
+
+
+
 ////读取温湿度
 //	  	  AHT20_Read(&temperature, &humidity);
 //	  	  // 打印温湿度
@@ -241,6 +360,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -251,7 +371,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -266,7 +386,13 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV2;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }

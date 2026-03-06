@@ -29,19 +29,11 @@ typedef struct {
     uint16_t *line_buffer;  // 指向行缓冲区的指针
     uint8_t buffer_rows;    // 缓冲区行数
     uint8_t buffer_head;    // 当前显示的起始行在缓冲区中的索引
+    uint8_t bg_height;
 } LCD_Context;
 
-static LCD_Context lcd_ctx = {
-    .cursor_x = 0,
-    .cursor_y = 0,
-    .line_height = 16,
-    .text_color = 0xFFFF,       // 白色
-    .bg_color = 0x0000,          // 黑色
-    .width = X_MAX_PIXEL-16,
-    .height = Y_MAX_PIXEL-32,
-    .font = NULL,
-    .auto_wrap = 1
-};
+extern LCD_Context lcd_ctx; //在cursor_global.c中统一初始化
+
 
 void LCD_ScrollUp(uint8_t lines);
 void LCD_SetCursor(uint8_t x, uint8_t y);
