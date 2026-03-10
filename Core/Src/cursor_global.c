@@ -21,5 +21,8 @@ LCD_Context lcd_ctx = {
     .auto_wrap = 1,
     .start_y = 0,
     .line_count = 0,
-	.bg_height = 0
+	.bg_height = 0,
+    .current_page = 0,
+    .page_count = 1,
+    .page_history_head = 0
 };

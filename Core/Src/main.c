@@ -67,8 +67,7 @@ float angle2 =0;
 
 static int16_t last_position = 0;
 static uint32_t last_rotate_time = 0;
-static uint8_t cursor_moved = 0;
-
+static uint8_t timer_active = 0;        // 定时器是否激活
 // 字符集
 static const char* charset[] = {
     "abcdefghijklmnopqrstuvwxyz",            // 模式0: 小写字母
@@ -87,14 +86,29 @@ static const char* ctrl_preview[] = {
 	    "\\v",  // 垂直制表
 	    "\\f"   // 换页
 };
+// 模式名称
+static const char* mode_names[] = {
+    "Mode: letters",
+    "Mode: CAPS   ",
+    "Mode: numbers",
+    "Mode: symbols",
+    "Mode: CTRL   "
+};
 
 static uint8_t mode = 0;
 static uint8_t char_index = 0;
+static uint8_t inpmode = 0;
 
-// 控制字符的实际字符（与charset[3]相同，用于执行）
-#define CTRL_CHARS charset[4]
+//static uint32_t last_cursor_blink = 0;
+////static uint8_t cursor_visible = 1;
+//static uint8_t cursor_state = 0;  // 0: 不显示, 1: 显示
 
 
+// 预览显示区域的位置（在文本框上方）
+#define PREVIEW_X   90
+#define PREVIEW_Y   25
+#define MODE_X      8
+#define MODE_Y      25
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -155,6 +169,8 @@ float temperature, humidity; // 温度和湿度变量
  char message_hum[30];		// oled显示湿度字符串
  char message[50];
  AHT20_Init();
+ LCD_ShowString(8, 14, "AHT20 is ready", RED, &afont8x6);
+
  HAL_Delay(20);
 
 
@@ -172,9 +188,18 @@ if(MPU6050_Init(&hi2c1) == HAL_OK) {
 
 HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
 
-LCD_InitContext(55, 12, &afont12x8, 0xFFFF, 0x0000);
+LCD_InitContext(55, 5, &afont12x8, WHITE, BLACK);
 
-LCD_Printf("hello\r\n");
+LCD_Printf(" hello, A&B\n");
+
+
+// 显示模式提示
+LCD_ShowString(8, 25, "Mode: letters", GREEN, &afont8x6);
+
+// 显示初始预览
+char preview_buf[20];
+sprintf(preview_buf, "[%c]", charset[mode][char_index]);
+LCD_ShowString(PREVIEW_X, PREVIEW_Y, preview_buf, YELLOW, &afont12x8);
 
   /* USER CODE END 2 */
 
@@ -182,100 +207,163 @@ LCD_Printf("hello\r\n");
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  char pos_buf[20];
-	      sprintf(pos_buf, "X:%03d Y:%03d", lcd_ctx.cursor_x-8, lcd_ctx.cursor_y-lcd_ctx.start_y);
-	      LCD_ShowString(0, 30, pos_buf, GREEN, &afont8x6);
+	    // ==================== 光标闪烁处理 ====================
+        LCD_CursorBlink();
+
+	    // 显示光标位置信息（调试用）
+	    uint16_t current_line;
+	    uint8_t current_pos;
+	    LCD_GetCursorPos(&current_line, &current_pos);
+	    char pos_buf[30];
+	    sprintf(pos_buf, "L:%d P:%d", current_line, current_pos);
+	    LCD_ShowString(8,35, pos_buf, GREEN, &afont8x6);
+	    // ===== 添加这行：显示当前 inpmode =====
+	       char mode_buf[20];
+	       sprintf(mode_buf, "inpmode:%d", inpmode);
+	       LCD_ShowString(8, 145, mode_buf, RED, &afont8x6);
 
 
-	  // 1. 读取编码器位置
-	         int16_t current_position = (int16_t)__HAL_TIM_GET_COUNTER(&htim1);
+	    // ==================== 1. 读取编码器位置 ====================
+	    int16_t current_position = (int16_t)__HAL_TIM_GET_COUNTER(&htim1);
 
-	         // 2. 检测是否旋转
-	         if (current_position != last_position) {
-	             int8_t direction = (current_position > last_position) ? 1 : -1;
-	             last_position = current_position;
+	    // ==================== 2. 检测编码器旋转 ====================
+	    if (current_position != last_position) {
+	        int8_t direction = (current_position > last_position) ? 1 : -1;
+	        last_position = current_position;
+	        if(inpmode==0){
+	        // 更新字符索引
+	        int len = strlen(charset[mode]);
+	        char_index = (char_index + len + direction) % len;
 
-	             // 更新字符索引
-	             int len = strlen(charset[mode]);
-	             char_index = (char_index + len + direction) % len;
-
-	             if (mode == 4) {
-	                 // 模式4：显示控制字符预览
-	                 LCD_ShowString(lcd_ctx.cursor_x, lcd_ctx.cursor_y,
-	                                ctrl_preview[char_index],
-	                                lcd_ctx.text_color, lcd_ctx.font);
-	                 // ShowString 不移动光标
-	             } else {
-	             // 显示字符
-	             LCD_Printf("%c", charset[mode][char_index]);
-
-	             lcd_ctx.cursor_x -= lcd_ctx.font->w;
-	             }
-	             LCD_ClearArea(lcd_ctx.cursor_x, lcd_ctx.cursor_y+lcd_ctx.font->h-1,
-	             	                    lcd_ctx.font->w, 1,
-	             	                    0x0000);
-	             // 记录时间
-	             last_rotate_time = HAL_GetTick();
-	             cursor_moved = 0;
-	         }
-
-	         // 3. 检测按钮
-	         if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET) {
-	             HAL_Delay(20);
-	             if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET) {
-	                 while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET);
-	                 LCD_ClearArea(lcd_ctx.cursor_x, lcd_ctx.cursor_y,
-								   lcd_ctx.font->w * 2, lcd_ctx.font->h, lcd_ctx.bg_color);
-	                 mode = (mode + 1) % 5;
-	                 char_index = 0;
-
-	                 if (mode == 4) {
-						 // 模式3：显示第一个控制字符预览
-						 LCD_ShowString(lcd_ctx.cursor_x, lcd_ctx.cursor_y,
-										ctrl_preview[0],
-										lcd_ctx.text_color, lcd_ctx.font);
-					 } else {
-						 // 其他模式：显示第一个字符
-						 LCD_Printf("%c", charset[mode][char_index]);
-						 lcd_ctx.cursor_x -= lcd_ctx.font->w;
-					 }
-
-	                 last_rotate_time = HAL_GetTick();
-	                 cursor_moved = 0;
-	             }
-	         }
-
-	         // 4. 800ms 超时推进光标
-	         if (!cursor_moved && last_rotate_time != 0) {
-	             if (HAL_GetTick() - last_rotate_time > 800) {
-
-	            	 if (mode == 4) {
-	            	             // 模式3：执行控制字符功能
-	            	             // 先擦除预览的 [XXX]
-	            	             LCD_ClearArea(lcd_ctx.cursor_x, lcd_ctx.cursor_y,
-	            	                           lcd_ctx.font->w * 2, lcd_ctx.font->h, lcd_ctx.bg_color);
-
-	            	             // 通过printf输出实际控制字符（自动执行功能）
-	            	             LCD_Printf("%c", CTRL_CHARS[char_index]);
+	        // 清除之前的预览
+	        LCD_ClearArea(PREVIEW_X, PREVIEW_Y,3*lcd_ctx.font->w, lcd_ctx.font->h, lcd_ctx.bg_color);
 
 
-	            	         } else {
-	            	             // 其他模式：正常推进光标
-								 lcd_ctx.cursor_x += lcd_ctx.font->w;
-								 if (lcd_ctx.cursor_x + lcd_ctx.font->w > lcd_ctx.width + 8) {
-									 lcd_ctx.cursor_x = 8;
-									 lcd_ctx.cursor_y += lcd_ctx.line_height;
-								 }
-	            	         }
-	                 cursor_moved = 1;
-	       	      LCD_ClearArea(lcd_ctx.cursor_x, lcd_ctx.cursor_y+lcd_ctx.font->h-1,
-	       	                    lcd_ctx.font->w, 1,
-	       	                    0xFFFF);
-	                 last_rotate_time = 0;
-	             }
-	         }
+	        // 显示当前选中的字符预览
+	        if (mode == 4) {
+	            // 控制字符模式：显示预览文本
+	            LCD_ShowString(PREVIEW_X, PREVIEW_Y,
+	                          ctrl_preview[char_index],
+	                          RED, &afont12x8);
+	        } else {
+	            // 普通字符模式：显示字符
+	            char preview_str[4] = "[ ]";
+	            preview_str[1] = charset[mode][char_index];
+	            LCD_ShowString(PREVIEW_X, PREVIEW_Y, preview_str,
+	                          YELLOW, &afont12x8);
+	        }}
+	        if(inpmode==1){
+	        	LCD_ClearArea(PREVIEW_X, PREVIEW_Y,3*lcd_ctx.font->w, lcd_ctx.font->h, CYAN);
+	        }
+	        if(inpmode==2){
+
+	        }
+
+	        // 更新计时器
+	        last_rotate_time = HAL_GetTick();
+	        timer_active = 1;  // 启动800ms计时
+	    }
+
+	    // ==================== 3. 检测模式切换按钮 ====================
+	    // PA10 短按切换模式
+	    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET) {
+	        HAL_Delay(20);  // 消抖
+
+	        if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET) {
+	            // 等待按钮释放
+	            uint32_t pressTime = 0;
+	            int longPressHandled = 0;  // 标记是否已经处理过长按
+	            uint32_t startTime = HAL_GetTick();  // 记录开始时间
+	            while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET) {
+	                HAL_Delay(10);
+	                pressTime = HAL_GetTick() - startTime;
+
+					// 检测长按（例如1000ms = 1秒）
+					if (pressTime >= 1000 && !longPressHandled) {
+						longPressHandled = 1;
+
+						// ===== 长按操作：切换输入模式 =====
+
+						 inpmode = (inpmode + 1) % 3;
+
+						// 显示提示信息
+						LCD_ClearArea(8, 130, 80, 10, lcd_ctx.bg_color);
+						LCD_ShowString(8, 130, "Input Mode Changed", YELLOW, &afont8x6);
+
+					}
+	            }
+	            if (!longPressHandled) {
+
+	            // === 切换模式 ===
+	            mode = (mode + 1) % 5;
+	            char_index = 0;
+
+	            // === 更新显示 ===
+
+	            // 清除模式显示
+	            LCD_ClearArea(MODE_X, MODE_Y, 80, 10, lcd_ctx.bg_color);
+
+	            // 显示新模式名称
+	            LCD_ShowString(MODE_X, MODE_Y, mode_names[mode],
+	                          GREEN, &afont8x6);
+
+	            // 清除预览区域
+	            LCD_ClearArea(PREVIEW_X, PREVIEW_Y, 3*lcd_ctx.font->w, lcd_ctx.font->h, lcd_ctx.bg_color);
+
+	            // 显示新模式的第一个字符预览
+	            if (mode == 4) {
+	                LCD_ShowString(PREVIEW_X, PREVIEW_Y,
+	                              ctrl_preview[0], RED, &afont12x8);
+	            } else {
+	                char preview_str[4] = "[ ]";
+	                preview_str[1] = charset[mode][0];
+	                LCD_ShowString(PREVIEW_X, PREVIEW_Y, preview_str,
+	                              YELLOW, &afont12x8);
+	            }
+
+	            // 重置计时器
+	            last_rotate_time = HAL_GetTick();
+//	            timer_active = 1;
+	            }
+	        }
+	    }
+
+	    // ==================== 4. 800ms超时检测 ====================
+	    // 如果旋转后800ms没有操作，自动输出当前字符
+	    if (timer_active && (HAL_GetTick() - last_rotate_time > 800)) {
+	    	if (inpmode == 0){
+				if (mode == 4) {
+					// 控制字符模式：执行控制功能
+					char ctrl_ch = charset[4][char_index];
+
+					// 执行控制字符
+					LCD_Printf("%c", ctrl_ch);
+
+					//切换模式至正常输入
+					mode = 0;
+					// 更新预览
+					LCD_ClearArea(PREVIEW_X, PREVIEW_Y,3*lcd_ctx.font->w, lcd_ctx.font->h, lcd_ctx.bg_color);
+					char preview_str[4] = "[ ]";
+					preview_str[1] = charset[mode][0];
+					LCD_ShowString(PREVIEW_X, PREVIEW_Y, preview_str,
+								  YELLOW, &afont12x8);
+				} else {
+					// 普通字符模式：输出当前字符
+					char ch = charset[mode][char_index];
+					LCD_Printf("%c", ch);
 
 
+				}
+	    	}
+	    	if (inpmode == 1){
+	    		LCD_ShowString(8, 120, "wait", YELLOW, &afont8x6);
+
+
+	    	}
+	        timer_active = 0;  // 停止计时
+
+
+	    }
 
 
 ////读取温湿度

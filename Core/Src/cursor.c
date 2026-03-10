@@ -8,61 +8,73 @@
 #include "cursor.h"
 #include "LCD.h"
 #include "spi.h"
+#include "printf.h"
 
-// 向上滚动
+
+
+// ==================== 辅助函数 ====================
+
+void LCD_GetLine(uint16_t line_index, char *buffer) {
+    if (!buffer) return;
+
+    if (line_index < lcd_ctx.history_count) {
+        strcpy(buffer, lcd_ctx.history[lcd_ctx.current_page][line_index]);
+    } else {
+        buffer[0] = '\0';
+    }
+}
+
 void LCD_ScrollUp(uint8_t lines) {
-    // 将屏幕内容向上移动 lines 行
-    uint8_t char_height = lcd_ctx.font->h;
-    uint16_t scroll_height = lines * char_height;
+    if (!lcd_ctx.font || lines == 0) return;
 
-    // 从屏幕底部向上读取数据并移动到上部
-    for (uint16_t y = scroll_height; y < lcd_ctx.height; y++) {
-        // 这里需要实现从LCD读取数据的函数
-        // 简化处理：直接清空最后一行
+    if (lcd_ctx.history_head + lines < lcd_ctx.history_count) {
+        lcd_ctx.history_head += lines;
+    } else {
+        lcd_ctx.history_head = lcd_ctx.history_count > lines ?
+                               lcd_ctx.history_count - lines : 0;
     }
 
-    // 清空最后 lines 行
-    set_window(0, lcd_ctx.height - scroll_height,
-               X_MAX_PIXEL - 1, lcd_ctx.height - 1);
+    LCD_RefreshDisplay();
+}
 
-    uint8_t high = lcd_ctx.bg_color >> 8;
-    uint8_t low = lcd_ctx.bg_color & 0xFF;
-    uint8_t buffer[256];
+void LCD_GetCursorPos(uint16_t *line, uint8_t *pos) {
+    if (line) *line = lcd_ctx.current_line;
+    if (pos) *pos = lcd_ctx.current_line_pos;
+}
 
-    for (uint16_t i = 0; i < sizeof(buffer); i += 2) {
-        buffer[i] = high;
-        buffer[i + 1] = low;
+uint8_t LCD_SetCursorPos(uint16_t line, uint8_t pos) {
+    if (!lcd_ctx.font) return 0;
+
+    if (line < lcd_ctx.history_count && pos <= MAX_CHARS_PER_LINE) {
+        lcd_ctx.current_line = line;
+        lcd_ctx.current_line_pos = pos;
+        LCD_SyncCursor();
+        LCD_RefreshDisplay();
+        return 1;
+    }
+    return 0;
+}
+
+void LCD_CursorBlink(void){
+	static uint32_t last_cursor_blink = 0;
+	static uint8_t cursor_state = 0;
+    if (HAL_GetTick() - last_cursor_blink > 500) {  // 500ms 闪烁一次
+        last_cursor_blink = HAL_GetTick();
+        cursor_state = !cursor_state;
+
+        if (cursor_state) {
+            // 显示光标：在光标位置画一条下划线
+            LCD_ClearArea(lcd_ctx.cursor_x,
+                         lcd_ctx.cursor_y + lcd_ctx.font->h - 1,
+                         lcd_ctx.font->w, 1,
+                         0xFFFF);  // 白色下划线
+        } else {
+            // 隐藏光标：用背景色覆盖下划线
+            LCD_ClearArea(lcd_ctx.cursor_x,
+                         lcd_ctx.cursor_y + lcd_ctx.font->h - 1,
+                         lcd_ctx.font->w, 1,
+                         lcd_ctx.bg_color);  // 背景色
+        }
     }
 
-    uint32_t total_pixels = X_MAX_PIXEL * scroll_height;
-    uint32_t remaining = total_pixels * 2;
-
-    DC_SET1();
-    CS_SET0();
-
-    while (remaining > 0) {
-        uint32_t send_size = (remaining > sizeof(buffer)) ? sizeof(buffer) : remaining;
-        HAL_SPI_Transmit(&hspi2, buffer, send_size, HAL_MAX_DELAY);
-        remaining -= send_size;
-    }
-
-    CS_SET1();
 }
-
-// 设置光标位置
-void LCD_SetCursor(uint8_t x, uint8_t y) {
-    lcd_ctx.cursor_x = x;
-    lcd_ctx.cursor_y = y;
-}
-
-// 获取当前光标位置
-void LCD_GetCursor(uint8_t *x, uint8_t *y) {
-    *x = lcd_ctx.cursor_x;
-    *y = lcd_ctx.cursor_y;
-}
-
-// 设置自动换行
-void LCD_SetAutoWrap(uint8_t enable) {
-    lcd_ctx.auto_wrap = enable;
-}
-
